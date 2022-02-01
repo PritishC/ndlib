@@ -53,13 +53,29 @@ class IndependentCascadesModel(DiffusionModel):
 
         if self.actual_iteration == 0:
             self.actual_iteration += 1
+
+            # 0 for not infected, 1 for infected
+            edge_status = dict.fromkeys(self.graph.edges, 0)
+            # The below does not count the seed nodes but we don't care about
+            # them anyway - we only care about the nodes that got infected
+            # during cascade.
+            node_infection_status = dict.fromkeys(self.graph.nodes, 0)
+
+            self.edge_status = edge_status
+            self.node_infection_status = node_infection_status
+
             delta, node_count, status_delta = self.status_delta(actual_status)
             if node_status:
                 return {"iteration": 0, "status": actual_status.copy(),
-                        "node_count": node_count.copy(), "status_delta": status_delta.copy()}
+                        "node_count": node_count.copy(), "status_delta": status_delta.copy(),
+                        "edge_status": edge_status, "node_infection_status": node_infection_status}
             else:
                 return {"iteration": 0, "status": {},
-                        "node_count": node_count.copy(), "status_delta": status_delta.copy()}
+                        "node_count": node_count.copy(), "status_delta": status_delta.copy(),
+                        "edge_status": edge_status, "node_infection_status": node_infection_status}
+        else:
+            edge_status = self.edge_status
+            node_infection_status = self.node_infection_status
 
         for u in self.graph.nodes:
             if self.status[u] != 1:
@@ -73,6 +89,7 @@ class IndependentCascadesModel(DiffusionModel):
 
                 for v in neighbors:
                     if actual_status[v] == 0:
+                        # Edge key
                         key = (u, v)
 
                         # Individual specified thresholds
@@ -81,20 +98,28 @@ class IndependentCascadesModel(DiffusionModel):
                                 threshold = self.params['edges']['threshold'][key]
                             elif (v, u) in self.params['edges']['threshold'] and not self.graph.directed:
                                 threshold = self.params['edges']['threshold'][(v, u)]
+                                # Change edge key as well
+                                key = (v, u)
 
                         flip = np.random.random_sample()
                         if flip <= threshold:
                             actual_status[v] = 1
+                            node_infection_status[v] = 1
+                            edge_status[key] = 1
 
             actual_status[u] = 2
 
         delta, node_count, status_delta = self.status_delta(actual_status)
         self.status = actual_status
+        self.edge_status = edge_status
+        self.node_infection_status = node_infection_status
         self.actual_iteration += 1
 
         if node_status:
             return {"iteration": self.actual_iteration - 1, "status": delta.copy(),
-                    "node_count": node_count.copy(), "status_delta": status_delta.copy()}
+                    "node_count": node_count.copy(), "status_delta": status_delta.copy(),
+                    "edge_status": edge_status, "node_infection_status": node_infection_status}
         else:
             return {"iteration": self.actual_iteration - 1, "status": {},
-                    "node_count": node_count.copy(), "status_delta": status_delta.copy()}
+                    "node_count": node_count.copy(), "status_delta": status_delta.copy(),
+                    "edge_status": edge_status, "node_infection_status": node_infection_status}
